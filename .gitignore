@@ -1,0 +1,13 @@
+# 빌드 산출물
+.build/
+build/
+
+# 에디터
+.swiftpm/
+.vscode/
+
+.DS_Store
+
+# 로컬 전용 문서·기록
+docs/
+.superpowers/
