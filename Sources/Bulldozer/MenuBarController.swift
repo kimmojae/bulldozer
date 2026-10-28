@@ -49,6 +49,13 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     private var readTicks = 0
     private var appsObservation: NSKeyValueObservation?
 
+    /// 이번 상태에서 «를 이미 다뤘는가. 사용자가 »로 닫은 걸 주기적 읽기가 다시 열지 않게, 상태가 바뀔 때만 다시 본다
+    private var overflowHandled = false
+    /// 우리가 연 «. 접을 때 이것만 닫는다(사용자가 연 건 건드리지 않는다)
+    private var openedOverflow = false
+    /// «를 누르려고 보낸 클릭이 globalClick으로 되돌아오는 걸 무시할 시각
+    private var ignoreClicksUntil: TimeInterval = 0
+
     private static let hiddenImage = NSImage(systemSymbolName: "poweron", accessibilityDescription: MenuBarInventory.hiddenSeparatorLabel)
     /// `‖`. SF Symbol에 얇은 이중선이 없어(pause는 재생 버튼처럼 보인다) `poweron`과 비슷한 굵기로 직접 그린다
     private static let alwaysImage: NSImage = {
@@ -128,7 +135,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         NSEvent.addGlobalMonitorForEvents(matching: .leftMouseUp) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self, self.machine.state != .collapsed, NSEvent.modifierFlags.contains(.command),
-                      HoverRegion.contains(NSEvent.mouseLocation, screens: self.screens) else { return }
+                      HoverRegion.inMenuBar(NSEvent.mouseLocation, screens: self.screens) else { return }
                 self.heldForDrop = self.machine.state
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                     MainActor.assumeIsolated { self.read() }
@@ -148,16 +155,20 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     }
 
     private func tick() {
-        // 접혀 있을 때는 빈 곳에서만 펼친다(아이콘을 누르러 갈 때 펼쳐지지 않게). 펼친 뒤에는 오른쪽 전체에서 유지한다
-        let emptyOnly = machine.state == .collapsed ? statusWidth : nil
-        let inBar = HoverRegion.contains(NSEvent.mouseLocation, screens: screens, statusWidth: emptyOnly)
+        // 접혀 있을 때는 빈 곳에서만 펼친다(아이콘을 누르러 갈 때 펼쳐지지 않게).
+        // 펼친 뒤에는 메뉴바 줄 전체에서 유지한다. 넘친 아이콘(«)이 노치 왼쪽에 펼쳐지기 때문이다
+        let point = NSEvent.mouseLocation
+        let inBar = machine.state == .collapsed
+            ? HoverRegion.contains(point, screens: screens, statusWidth: statusWidth)
+            : HoverRegion.inMenuBar(point, screens: screens)
         transition { $0.pointer(inBar: inBar, at: Self.now) }
     }
 
     private func globalClick() {
         // ⌘를 누른 클릭은 아이콘 옮기기(⌘-드래그)다. 메뉴를 쓰는 중으로 보고 고정하면 마우스를 내려도 안 접힌다(실측)
-        if NSEvent.modifierFlags.contains(.command) { return }
-        if HoverRegion.contains(NSEvent.mouseLocation, screens: screens) {
+        if NSEvent.modifierFlags.contains(.command) || Self.now < ignoreClicksUntil { return }
+        // 펼쳐져 있을 때만 의미가 있어서(clickedInBar) 펼친 상태와 같은 영역(메뉴바 줄 전체)으로 본다
+        if HoverRegion.inMenuBar(NSEvent.mouseLocation, screens: screens) {
             transition { $0.clickedInBar() }
         } else {
             let now = Self.now
@@ -239,6 +250,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         let before = machine.state
         change(&machine)
         guard machine.state != before else { return }
+        overflowHandled = false
         applyCurrentState()
         // 메뉴바가 다시 그려진 뒤 한 번 읽는다. 펼쳤으면 위치·새 앱을, 접었으면 빈 곳 폭을 얻는다
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
@@ -280,6 +292,9 @@ final class MenuBarController: NSObject, NSMenuDelegate {
                 self.applyCurrentState()
             } else if self.store != before {
                 self.applyRestriction()
+            } else if state == self.machine.state {
+                // 읽는 동안 상태가 바뀌었거나 숨김을 다시 거는 중이면 위치가 안 맞아 다음 읽기에 맡긴다
+                self.followOverflow(snapshot)
             }
             done?()
             if self.readAgain {
@@ -287,6 +302,51 @@ final class MenuBarController: NSObject, NSMenuDelegate {
                 self.read()
             }
         }
+    }
+
+    // MARK: - 넘침 («)
+
+    /// 펼친 동안은 넘친 아이콘도 노치 왼쪽에 이어서 보이게 «를 대신 누르고, 접히면 우리가 연 것만 닫는다
+    private func followOverflow(_ snapshot: MenuBarInventory.Snapshot) {
+        // 누르고 있는 중(⌘-드래그 등)에 클릭을 보내면 그 동작이 끊긴다. 다음 읽기에서 다시 본다
+        guard !overflowHandled, NSEvent.pressedMouseButtons == 0, heldForDrop == nil else { return }
+        let allowed = Sections.allowed(for: machine.state, sections: store.sections, ownBundleID: ownBundleID,
+                                       keepSeparator: machine.mode == .click).map(Set.init)
+        let shown = snapshot.items.filter { Sections.systemOwners.contains($0.bundleID) || allowed?.contains($0.bundleID) ?? true }
+        overflowHandled = true
+        guard let button = snapshot.overflowButton else {
+            openedOverflow = false
+            return
+        }
+        let isOpen = Overflow.isOpen(button: button, shown: shown)
+        if machine.state != .collapsed, !isOpen {
+            press(button)
+            openedOverflow = true
+        } else if machine.state == .collapsed, isOpen, openedOverflow {
+            press(button)
+            openedOverflow = false
+        }
+    }
+
+    /// «는 손쉬운 사용으로 누를 수 없고(AXPress 미지원), MenuBarAgent에 직접 보낸 클릭에도 반응하지 않아 실제 클릭을 보낸다(실측).
+    /// 클릭하면 커서가 그 자리로 옮겨지므로 바로 제자리로 돌려놓는다
+    private func press(_ frame: CGRect) {
+        guard let back = CGEvent(source: nil)?.location else { return }
+        // 손쉬운 사용 좌표와 CGEvent 좌표는 기준(주 화면 왼쪽 위)이 같다
+        let point = CGPoint(x: frame.midX, y: frame.midY)
+        ignoreClicksUntil = Self.now + 0.3
+        Self.post(.leftMouseDown, at: point)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) {
+            Self.post(.leftMouseUp, at: point)
+            CGWarpMouseCursorPosition(back)
+            // 커서를 옮기면 잠깐 마우스 움직임이 막힌다. 바로 다시 잇는다
+            CGAssociateMouseAndMouseCursorPosition(1)
+        }
+    }
+
+    private nonisolated static func post(_ type: CGEventType, at point: CGPoint) {
+        CGEvent(mouseEventSource: CGEventSource(stateID: .privateState), mouseType: type,
+                mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cgSessionEventTap)
     }
 
     /// 접힌 상태에서 보이는 아이콘(보이는 구역 앱 + 시스템)의 왼쪽 끝을 잰다.

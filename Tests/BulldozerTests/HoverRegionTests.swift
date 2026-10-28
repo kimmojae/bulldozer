@@ -57,6 +57,17 @@ struct HoverRegionTests {
         #expect(!HoverRegion.contains(CGPoint(x: 1500, y: -10), screens: externalFirst, statusWidth: 828))  // 아이콘 위
     }
 
+    // MARK: - 메뉴바 줄 전체 (펼친 뒤 유지하는 영역)
+
+    @Test("펼친 뒤에는 노치 왼쪽까지 메뉴바 줄 전체에서 유지한다 — 넘친 아이콘(«)이 거기 펼쳐진다")
+    func menuBarIncludesLeftOfNotch() {
+        #expect(HoverRegion.inMenuBar(CGPoint(x: 300, y: -10), screens: externalFirst))   // 노치 왼쪽
+        #expect(HoverRegion.inMenuBar(CGPoint(x: 1500, y: -10), screens: externalFirst))  // 노치 오른쪽
+        #expect(HoverRegion.inMenuBar(CGPoint(x: 300, y: 1070), screens: externalFirst))  // 외장 왼쪽
+        #expect(!HoverRegion.inMenuBar(CGPoint(x: 300, y: -50), screens: externalFirst))  // 메뉴바 아래
+        #expect(!HoverRegion.inMenuBar(CGPoint(x: 300, y: 1000), screens: externalFirst))
+    }
+
     // MARK: - 손쉬운 사용 좌표 (왼쪽 위 기준, y가 아래로)
 
     @Test("메뉴바 줄 위의 아이콘은 믿는다 — 외장 아래 내장 화면도")

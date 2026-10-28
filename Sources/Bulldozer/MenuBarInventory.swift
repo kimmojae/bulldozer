@@ -20,6 +20,8 @@ enum MenuBarInventory {
         var items: [StatusItemInfo]
         var hiddenSeparatorX: CGFloat?
         var alwaysSeparatorX: CGFloat?
+        /// macOS 27의 « 버튼(넘친 아이콘 보기). 넘치지 않으면 없다
+        var overflowButton: CGRect?
     }
 
     static var isTrusted: Bool { AXIsProcessTrusted() }
@@ -43,7 +45,11 @@ enum MenuBarInventory {
             for app in apps {
                 let items = statusItems(pid: app.pid)
                 if !items.isEmpty { snapshot.owners.append(app.bundleID) }
-                for (frame, label) in items where HoverRegion.isOnMenuBar(axFrame: frame, screens: screens) {
+                for (frame, label, role) in items where HoverRegion.isOnMenuBar(axFrame: frame, screens: screens) {
+                    // 시스템 아이콘(AXGroup)과 달리 «만 버튼이다. 설명 문자열은 시스템 언어마다 달라서 역할로 찾는다(실측)
+                    if app.bundleID == "com.apple.MenuBarAgent", role == kAXButtonRole as String {
+                        snapshot.overflowButton = frame
+                    }
                     switch label {
                     case hiddenSeparatorLabel: snapshot.hiddenSeparatorX = frame.midX
                     case alwaysSeparatorLabel: snapshot.alwaysSeparatorX = frame.midX
@@ -55,7 +61,7 @@ enum MenuBarInventory {
         }
     }
 
-    private static func statusItems(pid: pid_t) -> [(CGRect, String?)] {
+    private static func statusItems(pid: pid_t) -> [(frame: CGRect, label: String?, role: String?)] {
         let app = AXUIElementCreateApplication(pid)
         // 기본 타임아웃은 앱마다 몇 초라, 바쁜 앱 하나가 전체를 붙잡는다
         AXUIElementSetMessagingTimeout(app, 0.1)
@@ -69,7 +75,8 @@ enum MenuBarInventory {
             var extent = CGSize.zero
             AXValueGetValue(position as! AXValue, .cgPoint, &origin)
             AXValueGetValue(size as! AXValue, .cgSize, &extent)
-            return (CGRect(origin: origin, size: extent), attribute(child, kAXDescriptionAttribute) as? String)
+            return (CGRect(origin: origin, size: extent), attribute(child, kAXDescriptionAttribute) as? String,
+                    attribute(child, kAXRoleAttribute) as? String)
         }
     }
 
