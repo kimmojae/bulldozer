@@ -56,6 +56,11 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     /// «를 누르려고 보낸 클릭이 globalClick으로 되돌아오는 걸 무시할 시각
     private var ignoreClicksUntil: TimeInterval = 0
 
+    /// 펼친 상태에서 마지막으로 읽은 아이콘 위치. 메뉴바를 클릭했을 때 어느 앱 아이콘인지 찾는 데 쓴다
+    private var shownItems: [StatusItemInfo] = []
+    /// 펼친 상태에서 누른 아이콘의 앱. 그 앱의 창(팝오버 등)을 클릭하는 건 아직 그 앱을 쓰는 중이라 접지 않는다
+    private var clickedApp: String?
+
     private static let hiddenImage = NSImage(systemSymbolName: "poweron", accessibilityDescription: MenuBarInventory.hiddenSeparatorLabel)
     /// `‖`. SF Symbol에 얇은 이중선이 없어(pause는 재생 버튼처럼 보인다) `poweron`과 비슷한 굵기로 직접 그린다
     private static let alwaysImage: NSImage = {
@@ -175,9 +180,16 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             return
         }
         // 펼쳐져 있을 때만 의미가 있어서(clickedInBar) 펼친 상태와 같은 영역(메뉴바 줄 전체)으로 본다
-        if HoverRegion.inMenuBar(NSEvent.mouseLocation, screens: screens) {
+        let point = NSEvent.mouseLocation
+        if HoverRegion.inMenuBar(point, screens: screens) {
+            let at = Self.axPoint(point)
+            clickedApp = machine.state == .collapsed ? nil : shownItems.first { $0.frame.contains(at) }?.bundleID
             transition { $0.clickedInBar() }
+        } else if let clickedApp, MenuBarInventory.windowOwner(at: Self.axPoint(point)) == clickedApp {
+            // 아이콘을 눌러 연 팝오버 안을 클릭함. 접으면 아이콘이 숨으면서 팝오버도 붙어 있던 자리를 잃는다
+            return
         } else {
+            clickedApp = nil
             let now = Self.now
             transition { $0.clickedOutsideBar(at: now) }
         }
@@ -267,6 +279,11 @@ final class MenuBarController: NSObject, NSMenuDelegate {
 
     private static var now: TimeInterval { ProcessInfo.processInfo.systemUptime }
 
+    /// AppKit 좌표(주 화면 왼쪽 아래 기준, y가 위로) → 손쉬운 사용·CGWindow 좌표(주 화면 왼쪽 위 기준, y가 아래로)
+    private static func axPoint(_ point: CGPoint) -> CGPoint {
+        CGPoint(x: point.x, y: (NSScreen.screens.first?.frame.height ?? 0) - point.y)
+    }
+
     // MARK: - 아이콘 읽기
 
     /// 아이콘 읽기 하나로 세 가지를 얻는다: 새 앱, 위치(펼쳐져 있을 때), 빈 곳 폭(접혀 있을 때).
@@ -290,6 +307,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             if state == .collapsed {
                 self.statusWidth = self.statusWidth(of: snapshot.items) ?? self.statusWidth
             } else if let hiddenX = snapshot.hiddenSeparatorX {
+                self.shownItems = snapshot.items
                 let positions = Sections.resolve(items: snapshot.items, hiddenSeparatorX: hiddenX,
                                                  alwaysSeparatorX: snapshot.alwaysSeparatorX, ownBundleID: self.ownBundleID)
                 self.store.merge(positions: positions, takenWhile: state, alwaysSeparatorKnown: snapshot.alwaysSeparatorX != nil)

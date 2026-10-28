@@ -61,6 +61,21 @@ enum MenuBarInventory {
         }
     }
 
+    /// 이 점(손쉬운 사용 좌표, 왼쪽 위 기준)에서 맨 앞에 있는 창의 앱.
+    /// 창 위치와 소유 프로세스는 화면 기록 권한 없이도 읽힌다(이름만 권한이 필요하다)
+    static func windowOwner(at point: CGPoint) -> String? {
+        guard let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
+                as? [[String: Any]] else { return nil }
+        // 앞 창부터 온다. 투명한 창(alpha 0)은 클릭을 받지 않아 건너뛴다
+        let front = windows.first { window in
+            guard let bounds = window[kCGWindowBounds as String] as? NSDictionary,
+                  let rect = CGRect(dictionaryRepresentation: bounds) else { return false }
+            return (window[kCGWindowAlpha as String] as? Double ?? 1) > 0 && rect.contains(point)
+        }
+        guard let pid = front?[kCGWindowOwnerPID as String] as? pid_t else { return nil }
+        return NSRunningApplication(processIdentifier: pid)?.bundleIdentifier
+    }
+
     private static func statusItems(pid: pid_t) -> [(frame: CGRect, label: String?, role: String?)] {
         let app = AXUIElementCreateApplication(pid)
         // 기본 타임아웃은 앱마다 몇 초라, 바쁜 앱 하나가 전체를 붙잡는다
