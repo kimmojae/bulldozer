@@ -57,6 +57,25 @@ struct HoverRegionTests {
         #expect(!HoverRegion.contains(CGPoint(x: 1500, y: -10), screens: externalFirst, statusWidth: 828))  // 아이콘 위
     }
 
+    // MARK: - 손쉬운 사용 좌표 (왼쪽 위 기준, y가 아래로)
+
+    @Test("메뉴바 줄 위의 아이콘은 믿는다 — 외장 아래 내장 화면도")
+    func onMenuBar() {
+        #expect(HoverRegion.isOnMenuBar(axFrame: CGRect(x: 1470, y: 7, width: 45, height: 24), screens: externalFirst))
+        // 내장(y -1243...0)의 메뉴바는 손쉬운 사용 좌표로 y 1080...1117.5
+        #expect(HoverRegion.isOnMenuBar(axFrame: CGRect(x: 1470, y: 1087, width: 45, height: 24), screens: externalFirst))
+        // 내장이 주 화면이고 외장이 위에 있으면 외장 메뉴바는 음수 y
+        #expect(HoverRegion.isOnMenuBar(axFrame: CGRect(x: 1470, y: 7, width: 45, height: 24), screens: [builtin, external]))
+        #expect(HoverRegion.isOnMenuBar(axFrame: CGRect(x: 1470, y: -1073, width: 45, height: 24), screens: [builtin, external]))
+    }
+
+    @Test("넘쳐서 안 그려진 아이콘의 엉뚱한 위치는 버린다(실측 x=-1, y=1231)")
+    func overflowedIconIsNotOnMenuBar() {
+        #expect(!HoverRegion.isOnMenuBar(axFrame: CGRect(x: -1, y: 1231, width: 38, height: 24), screens: [builtin]))
+        #expect(!HoverRegion.isOnMenuBar(axFrame: CGRect(x: -1, y: 7, width: 0, height: 24), screens: [builtin]))
+        #expect(!HoverRegion.isOnMenuBar(axFrame: CGRect(x: 1470, y: 500, width: 45, height: 24), screens: externalFirst))
+    }
+
     @Test("노치 없는 화면은 메뉴바 오른쪽 절반")
     func noNotch() {
         #expect(HoverRegion.rect(for: external) == CGRect(x: 960, y: 2297, width: 960, height: 26))

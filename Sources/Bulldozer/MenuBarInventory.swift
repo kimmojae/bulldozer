@@ -13,6 +13,10 @@ enum MenuBarInventory {
     static let alwaysSeparatorLabel = "Bulldozer 항상 숨김 구분자"
 
     struct Snapshot {
+        /// 메뉴바 아이콘이 있는 앱 전부. 안 그려진 아이콘의 앱도 넣는다 — 숨김이 걸린 동안 켠 앱은
+        /// 허용 목록에 들기 전까지 안 그려져서, 그려진 것만 보면 영영 발견하지 못한다
+        var owners: [String]
+        /// 메뉴바 줄 위에 그려진 아이콘만. 위치로 구역을 정할 때 쓴다
         var items: [StatusItemInfo]
         var hiddenSeparatorX: CGFloat?
         var alwaysSeparatorX: CGFloat?
@@ -28,15 +32,18 @@ enum MenuBarInventory {
     }
 
     /// 앱 수십 개를 돌며 묻느라 1초쯤 걸려서 메인 스레드 밖에서 돈다. completion은 메인 큐에서 부른다
-    static func snapshot(completion: @escaping @MainActor @Sendable (Snapshot) -> Void) {
+    /// - screens: 위치는 메뉴바 줄 위에 있는 아이콘 것만 담는다. 넘쳐서(«) 안 그려진 아이콘은 위치가 엉뚱하다
+    static func snapshot(screens: [ScreenGeometry], completion: @escaping @MainActor @Sendable (Snapshot) -> Void) {
         // 메뉴바 아이콘은 .app만 가진다. 헬퍼 프로세스까지 물으면 타임아웃을 기다리느라 훨씬 느려진다
         let apps = NSWorkspace.shared.runningApplications
             .filter { $0.bundleURL?.pathExtension == "app" }
             .compactMap { app in app.bundleIdentifier.map { (pid: app.processIdentifier, bundleID: $0) } }
         DispatchQueue.global(qos: .userInitiated).async {
-            var snapshot = Snapshot(items: [], hiddenSeparatorX: nil, alwaysSeparatorX: nil)
+            var snapshot = Snapshot(owners: [], items: [], hiddenSeparatorX: nil, alwaysSeparatorX: nil)
             for app in apps {
-                for (frame, label) in statusItems(pid: app.pid) {
+                let items = statusItems(pid: app.pid)
+                if !items.isEmpty { snapshot.owners.append(app.bundleID) }
+                for (frame, label) in items where HoverRegion.isOnMenuBar(axFrame: frame, screens: screens) {
                     switch label {
                     case hiddenSeparatorLabel: snapshot.hiddenSeparatorX = frame.midX
                     case alwaysSeparatorLabel: snapshot.alwaysSeparatorX = frame.midX

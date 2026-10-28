@@ -263,11 +263,11 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         reading = true
         let state = override ?? heldForDrop ?? machine.state
         let releasesHold = heldForDrop != nil
-        MenuBarInventory.snapshot { [weak self] snapshot in
+        MenuBarInventory.snapshot(screens: screens) { [weak self] snapshot in
             guard let self else { return }
             self.reading = false
             let before = self.store
-            self.store.addDiscovered(snapshot.items.map(\.bundleID), ownBundleID: self.ownBundleID)
+            self.store.addDiscovered(snapshot.owners, ownBundleID: self.ownBundleID)
             if state == .collapsed {
                 self.statusWidth = self.statusWidth(of: snapshot.items) ?? self.statusWidth
             } else if let hiddenX = snapshot.hiddenSeparatorX {
