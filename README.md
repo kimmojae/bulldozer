@@ -28,13 +28,26 @@ macOS 27 메뉴바 아이콘 숨기기. 평소엔 숨겨 두고, 메뉴바에 �
 
 ## 설치
 
+macOS 27 이상이 필요하다.
+
+### DMG
+
+1. [Releases](https://github.com/kimmojae/bulldozer/releases)에서 `Bulldozer-<버전>.dmg`를 받아 `Bulldozer.app`을 `Applications`로 끌어다 놓는다.
+2. 처음 열면 "확인되지 않은 개발자"라며 막힌다(공증하지 않은 앱이라서). **시스템 설정 → 개인정보 보호 및 보안**에서 맨 아래 **그래도 열기**를 누른다. 한 번만 하면 된다.
+   터미널이 편하면 `xattr -cr /Applications/Bulldozer.app` 후 열어도 된다.
+3. **손쉬운 사용** 권한을 허용하고 앱을 다시 켠다(아래).
+
+업데이트는 새 DMG로 덮어쓰면 된다. 같은 인증서로 서명해서 권한은 유지된다.
+
+### 소스에서 빌드
+
 ```bash
 ./scripts/install.sh    # release 빌드 → /Applications/Bulldozer.app 교체 → 실행
 swift test              # 순수 로직 테스트
 ```
 
 손쉬운 사용 권한은 앱 서명에 묶여서, 재설치해도 풀리지 않게 고정 인증서로 서명한다.
-기본은 로컬 자체 서명 인증서 `qr2fa-selfsign`이고, `BULLDOZER_SIGN_ID=<인증서 이름> ./scripts/install.sh`로 바꾼다.
+기본은 처음 설치할 때 로그인 키체인에 만드는 자체 서명 인증서 `Bulldozer Local Signing`이고, `BULLDOZER_SIGN_ID=<인증서 이름> ./scripts/install.sh`로 바꾼다.
 서명에 실패하면 ad-hoc으로 서명하고 경고한다(그러면 권한이 풀려 아무것도 숨기지 않는다).
 
 처음 실행하면 **손쉬운 사용** 권한을 요청한다(시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용). 허용한 뒤 앱을 다시 켠다.

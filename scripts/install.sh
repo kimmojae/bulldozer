@@ -7,6 +7,13 @@ cd "$(dirname "$0")/.."
 APP_NAME="Bulldozer"
 INSTALL_DIR="/Applications"
 
+# macOS 27 비공개 API로 숨긴다. 그 아래 버전에서는 빌드는 되어도 실행이 거부된다(open 오류 -10825)
+MACOS_MAJOR="$(sw_vers -productVersion | cut -d. -f1)"
+if [ "$MACOS_MAJOR" -lt 27 ]; then
+    echo "❌ macOS 27 이상이 필요하다(지금: $(sw_vers -productVersion))" >&2
+    exit 1
+fi
+
 ./scripts/bundle.sh release
 
 # bundle.sh 안에서도 pkill 하지만, 그건 build/ 를 만들기 전 시점이다.
