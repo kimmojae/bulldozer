@@ -12,11 +12,49 @@ private let external = ScreenGeometry(
     notchRight: nil,
     menuBarHeight: 26)
 
+// 실측: 외장이 주 화면(원점)이고 내장은 그 아래. auxiliaryTopRightArea는 전역 좌표로 온다
+private let externalPrimary = ScreenGeometry(
+    frame: CGRect(x: 0, y: 0, width: 1920, height: 1080),
+    notchRight: nil,
+    menuBarHeight: 30)
+private let builtinBelow = ScreenGeometry(
+    frame: CGRect(x: 0, y: -1243, width: 1920, height: 1243),
+    notchRight: CGRect(x: 1064, y: -37.5, width: 856, height: 37.5),
+    menuBarHeight: 37.5)
+private let externalFirst = [externalPrimary, builtinBelow]
+
 @Suite("HoverRegion")
 struct HoverRegionTests {
     @Test("노치 화면은 노치 오른쪽만")
     func notch() {
         #expect(HoverRegion.rect(for: builtin) == CGRect(x: 1064, y: 1205.5, width: 856, height: 37.5))
+    }
+
+    @Test("외장 모니터가 주 화면이어도 노치 오른쪽에서 펼친다")
+    func notchOnSecondaryScreen() {
+        #expect(HoverRegion.contains(CGPoint(x: 1500, y: -10), screens: externalFirst))
+        #expect(!HoverRegion.contains(CGPoint(x: 500, y: -10), screens: externalFirst))
+    }
+
+    // 아이콘 위치는 주 화면(외장) 것만 읽혀서, 외장에서 잰 폭을 노치 오른쪽(856pt)에도 쓴다(실측)
+
+    @Test("노치 오른쪽이 꽉 차 외장에서 잰 폭이 더 넓어도 노치 오른쪽 어디서든 펼친다")
+    func overflowingNotchFallsBackToFull() {
+        for statusWidth: CGFloat in [856, 1000, 1600] {
+            #expect(HoverRegion.emptyRect(for: builtinBelow, statusWidth: statusWidth) == HoverRegion.rect(for: builtinBelow))
+            #expect(HoverRegion.contains(CGPoint(x: 1070, y: -10), screens: externalFirst, statusWidth: statusWidth))
+            #expect(HoverRegion.contains(CGPoint(x: 1910, y: -10), screens: externalFirst, statusWidth: statusWidth))
+        }
+    }
+
+    @Test("거의 꽉 차 빈 곳이 24pt보다 좁으면 전체 영역, 24pt부터는 빈 곳만")
+    func nearlyFullNotch() {
+        // 오른쪽 끝(1920) - 폭 - 4 - 노치 오른쪽 시작(1064) = 빈 곳 폭
+        #expect(HoverRegion.emptyRect(for: builtinBelow, statusWidth: 829) == HoverRegion.rect(for: builtinBelow))  // 23pt
+        #expect(HoverRegion.emptyRect(for: builtinBelow, statusWidth: 828)
+                == CGRect(x: 1064, y: -37.5, width: 24, height: 37.5))
+        #expect(HoverRegion.contains(CGPoint(x: 1080, y: -10), screens: externalFirst, statusWidth: 828))
+        #expect(!HoverRegion.contains(CGPoint(x: 1500, y: -10), screens: externalFirst, statusWidth: 828))  // 아이콘 위
     }
 
     @Test("노치 없는 화면은 메뉴바 오른쪽 절반")

@@ -3,7 +3,7 @@ import CoreGraphics
 /// 호버 판정에 필요한 화면 한 개의 기하. NSScreen에서 뽑아 만든다(AppKit 없이 테스트하려고).
 struct ScreenGeometry: Equatable {
     var frame: CGRect          // 전역 좌표 (NSScreen.frame)
-    var notchRight: CGRect?    // NSScreen.auxiliaryTopRightArea 그대로 (화면 로컬 좌표). 노치 없으면 nil
+    var notchRight: CGRect?    // NSScreen.auxiliaryTopRightArea 그대로 (전역 좌표, 실측). 노치 없으면 nil
     var menuBarHeight: CGFloat
 }
 
@@ -12,9 +12,8 @@ struct ScreenGeometry: Equatable {
 enum HoverRegion {
     static func rect(for screen: ScreenGeometry) -> CGRect {
         // `if let x = 옵셔널`: 값이 있을 때만 꺼내서 x로 쓴다
-        if let notch = screen.notchRight {
-            return notch.offsetBy(dx: screen.frame.minX, dy: screen.frame.minY)
-        }
+        // 이미 전역 좌표라 화면 원점을 더하지 않는다. 더하면 내장 화면이 주 화면이 아닐 때 영역이 화면 밖으로 간다
+        if let notch = screen.notchRight { return notch }
         let f = screen.frame
         return CGRect(x: f.midX, y: f.maxY - screen.menuBarHeight,
                       width: f.maxX - f.midX, height: screen.menuBarHeight)
