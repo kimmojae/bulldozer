@@ -74,11 +74,10 @@ enum Sections {
 }
 
 /// 앱별 구역 저장소. 보이는 위치가 기준이다. 어느 상태에서 읽은 위치를 얼마나 믿을지는 merge(takenWhile:)가 정한다.
-/// 예외는 새 앱: macOS가 새 아이콘을 맨 왼쪽(= always hidden 자리)에 놓으므로, 사용자가 옮기기 전까지는
-/// hidden으로 두고 `pending`에 올려 둔다. 위치 구역이 맨 왼쪽(always hidden)에서 바뀌면 옮긴 것으로 본다
+/// 새 앱도 예외 없이 위치를 따른다: macOS가 새 아이콘을 맨 왼쪽(`‖` 왼쪽)에 놓으므로 always hidden으로 시작하고,
+/// `|`를 눌러 전부 펼친 뒤 옮긴다. 예외를 두면 hover 때 `‖` 양쪽에 아이콘이 섞여 보여 구역을 알아볼 수 없었다(실제로 겪음)
 struct SectionStore: Equatable {
     var sections: [String: MenuBarSection] = [:]
-    var pending: Set<String> = []
 
     /// - alwaysSeparatorKnown: AH 구분선 위치를 읽었는가. 못 읽으면(노치에서 «« 로 넘침 등) resolve가 H 왼쪽을
     ///   전부 hidden으로 주므로, 그걸 믿고 always hidden 앱을 hidden으로 내리면 always hidden 구역이 비어 버린다
@@ -89,50 +88,31 @@ struct SectionStore: Equatable {
             return
         }
         for (bundle, section) in positions {
-            if sections[bundle] == nil {
-                adopt(bundle, at: section)
-            } else if pending.contains(bundle) {
-                guard section != .alwaysHidden else { continue }
-                pending.remove(bundle)
-                sections[bundle] = section
-            } else if !alwaysSeparatorKnown, sections[bundle] == .alwaysHidden, section == .hidden {
-                continue
-            } else {
-                sections[bundle] = section
-            }
+            if !alwaysSeparatorKnown, sections[bundle] == .alwaysHidden, section == .hidden { continue }
+            sections[bundle] = section
         }
     }
 
     /// 어느 상태에서 읽은 위치인지에 따라 믿을 수 있는 범위가 다르다.
     /// - 전부 펼침: 숨김이 없어 전부 믿는다.
     /// - 펼침(호버): always hidden 앱은 숨어 있어 위치가 엉뚱하고, AH 구분선도 감춰져 있다.
-    ///   그래서 always hidden 앱은 건드리지 않고, hidden 앱을 always hidden으로 올리지도 않는다.
-    ///   새 앱(pending)은 맨 왼쪽에 그대로 있어도 hidden으로 읽히므로, 보이는 쪽으로 옮긴 것만 받는다
+    ///   그래서 always hidden 앱은 건드리지 않고, hidden 앱을 always hidden으로 올리지도 않는다
     mutating func merge(positions: [String: MenuBarSection], takenWhile state: BarState, alwaysSeparatorKnown: Bool = true) {
         guard state == .expanded else {
             return merge(positions: positions, alwaysSeparatorKnown: alwaysSeparatorKnown)
         }
         var trusted: [String: MenuBarSection] = [:]
         for (bundle, section) in positions where sections[bundle] != .alwaysHidden {
-            if pending.contains(bundle), section != .visible { continue }
             trusted[bundle] = section == .alwaysHidden ? .hidden : section
         }
         merge(positions: trusted, alwaysSeparatorKnown: false)
     }
 
-    /// 실행 중에 새로 켜진 앱. 위치는 숨김 중이라 믿을 수 없고, 메뉴바 아이콘이 있다는 것만 안다
+    /// 실행 중에 새로 켜진 앱. 위치는 숨김 중이라 믿을 수 없고, 메뉴바 아이콘이 있다는 것만 안다.
+    /// macOS는 새 아이콘을 맨 왼쪽에 놓으니 always hidden이다
     mutating func addDiscovered(_ bundles: [String], ownBundleID: String) {
         for bundle in bundles where bundle != ownBundleID && !Sections.systemOwners.contains(bundle) && sections[bundle] == nil {
-            adopt(bundle, at: .alwaysHidden)
-        }
-    }
-
-    private mutating func adopt(_ bundle: String, at section: MenuBarSection) {
-        if section == .alwaysHidden {
-            sections[bundle] = .hidden
-            pending.insert(bundle)
-        } else {
-            sections[bundle] = section
+            sections[bundle] = .alwaysHidden
         }
     }
 }

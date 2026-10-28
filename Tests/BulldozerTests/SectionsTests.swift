@@ -61,7 +61,6 @@ struct SectionsTests {
         var store = SectionStore()
         store.merge(positions: ["a": .alwaysHidden, "h": .hidden, "v": .visible])
         #expect(store.sections == ["a": .alwaysHidden, "h": .hidden, "v": .visible])
-        #expect(store.pending.isEmpty)
     }
 
     @Test("아는 앱은 지금 위치를 따른다 — 저장값과 보이는 위치가 어긋나지 않게(실제로 겪음)")
@@ -71,28 +70,26 @@ struct SectionsTests {
         #expect(store.sections == ["sun": .hidden, "v": .visible])
     }
 
-    @Test("처음 보는 앱은 hidden — 새 아이콘은 맨 왼쪽(always hidden 자리)에 생기지만 호버로 찾을 수 있게")
-    func newAppDefaultsToHidden() {
+    @Test("처음 보는 앱도 위치를 따른다 — 새 아이콘은 맨 왼쪽(‖ 왼쪽)에 생기니 always hidden")
+    func newAppFollowsPosition() {
         var store = SectionStore(sections: ["v": .visible])
         store.merge(positions: ["v": .visible, "new": .alwaysHidden])
-        #expect(store.sections == ["v": .visible, "new": .hidden])
-        #expect(store.pending == ["new"])
+        #expect(store.sections == ["v": .visible, "new": .alwaysHidden])
     }
 
-    @Test("새 앱은 맨 왼쪽에 그대로 있는 동안 hidden을 유지한다")
-    func pendingStaysHidden() {
-        var store = SectionStore(sections: ["new": .hidden], pending: ["new"])
-        store.merge(positions: ["new": .alwaysHidden])
+    @Test("새 앱을 옮기면 그 위치를 따른다")
+    func newAppMovedFollowsPosition() {
+        var store = SectionStore(sections: ["new": .alwaysHidden])
+        store.merge(positions: ["new": .hidden], takenWhile: .expandedAll)
         #expect(store.sections == ["new": .hidden])
-        #expect(store.pending == ["new"])
     }
 
-    @Test("새 앱을 사용자가 옮기면 그때부터 위치를 따른다")
-    func pendingMovedFollowsPosition() {
-        var store = SectionStore(sections: ["new": .hidden], pending: ["new"])
-        store.merge(positions: ["new": .visible])
-        #expect(store.sections == ["new": .visible])
-        #expect(store.pending.isEmpty)
+    @Test("새 앱은 hover로 펼쳐도 안 보인다 — hidden만 보이고, always hidden은 | 를 눌러야 보인다")
+    func newAppNotShownOnHover() {
+        var store = SectionStore(sections: ["h": .hidden, "v": .visible])
+        store.addDiscovered(["new"], ownBundleID: own)
+        #expect(Sections.allowed(for: .expanded, sections: store.sections, ownBundleID: own) == [own, "h", "v"])
+        #expect(Sections.allowed(for: .expandedAll, sections: store.sections, ownBundleID: own) == nil)
     }
 
     @Test("종료한 앱의 구역은 지우지 않는다 — 다시 켜면 그대로")
@@ -102,12 +99,11 @@ struct SectionsTests {
         #expect(store.sections["gone"] == .hidden)
     }
 
-    @Test("실행 중에 발견한 새 앱은 hidden + 대기, 아는 앱·시스템·자신은 그대로")
+    @Test("실행 중에 발견한 새 앱은 always hidden, 아는 앱·시스템·자신은 그대로")
     func discovered() {
         var store = SectionStore(sections: ["v": .visible])
         store.addDiscovered(["v", "new", own, "com.apple.controlcenter"], ownBundleID: own)
-        #expect(store.sections == ["v": .visible, "new": .hidden])
-        #expect(store.pending == ["new"])
+        #expect(store.sections == ["v": .visible, "new": .alwaysHidden])
     }
 
     @Test("클릭 모드의 접힘은 구분자(자신)를 남긴다 — 클릭할 대상이 있어야 한다")

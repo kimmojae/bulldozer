@@ -366,13 +366,21 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     private static func loadStore() -> SectionStore {
         let defaults = UserDefaults.standard
         let raw = defaults.dictionary(forKey: Key.sections) as? [String: Int] ?? [:]
-        return SectionStore(sections: raw.compactMapValues(MenuBarSection.init(rawValue:)),
-                            pending: Set(defaults.stringArray(forKey: Key.pending) ?? []))
+        var sections = raw.compactMapValues(MenuBarSection.init(rawValue:))
+        // 예전에는 새 앱을 옮기기 전까지 hidden으로 두고 `pending`에 올렸다. 그 앱들은 아직 맨 왼쪽에 있으니 always hidden이다
+        for bundle in defaults.stringArray(forKey: Key.pending) ?? [] where sections[bundle] != nil {
+            sections[bundle] = .alwaysHidden
+        }
+        let store = SectionStore(sections: sections)
+        if defaults.object(forKey: Key.pending) != nil {
+            saveStore(store)
+            defaults.removeObject(forKey: Key.pending)
+        }
+        return store
     }
 
     private static func saveStore(_ store: SectionStore) {
         UserDefaults.standard.set(store.sections.mapValues(\.rawValue), forKey: Key.sections)
-        UserDefaults.standard.set(store.pending.sorted(), forKey: Key.pending)
     }
 
     // MARK: - 적용
