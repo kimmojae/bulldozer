@@ -86,6 +86,13 @@ struct BarMachine {
         }
     }
 
+    /// ⌘를 누르고 메뉴바 아이콘을 잡음(⌘-드래그 시작). 어디에 놓을지 보이게 ‖까지 전부 펼친다(Ice와 같은 방식).
+    /// 펼침(호버)에서는 ‖를 폭 0으로 감춰 두어, 모르고 그 너머에 놓으면 always hidden으로 들어갔다(실제로 겪음)
+    mutating func commandDragBegan() {
+        state = .expandedAll
+        leftAt = nil
+    }
+
     /// 고정을 풀고, 지금부터 영역 밖 시간을 잰다
     private mutating func unpin(at now: TimeInterval) {
         guard pinned else { return }

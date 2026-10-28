@@ -96,6 +96,20 @@ struct BarMachineTests {
         #expect(m.state == .expanded)
     }
 
+    @Test("⌘-드래그를 시작하면 어느 상태든 ‖까지 전부 펼치고, 놓고 벗어나면 접힌다")
+    func commandDragRevealsAll() {
+        var c = BarMachine()
+        c.commandDragBegan()
+        #expect(c.state == .expandedAll)
+        c.pointer(inBar: false, at: 1)
+        c.pointer(inBar: false, at: 1.5)
+        #expect(c.state == .collapsed)
+
+        var m = expandedMachine()
+        m.commandDragBegan()
+        #expect(m.state == .expandedAll)
+    }
+
     @Test("전부 펼침도 벗어나면 접힌다")
     func collapseFromAll() {
         var m = expandedMachine()

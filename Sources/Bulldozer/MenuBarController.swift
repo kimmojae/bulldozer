@@ -165,8 +165,15 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     }
 
     private func globalClick() {
-        // ⌘를 누른 클릭은 아이콘 옮기기(⌘-드래그)다. 메뉴를 쓰는 중으로 보고 고정하면 마우스를 내려도 안 접힌다(실측)
-        if NSEvent.modifierFlags.contains(.command) || Self.now < ignoreClicksUntil { return }
+        if Self.now < ignoreClicksUntil { return }
+        // ⌘를 누른 클릭은 아이콘 옮기기(⌘-드래그)다. 어디에 놓을지 보이게 전부 펼친다.
+        // 메뉴를 쓰는 중으로 보고 고정하지는 않는다 — 고정하면 마우스를 내려도 안 접힌다(실측)
+        if NSEvent.modifierFlags.contains(.command) {
+            if HoverRegion.inMenuBar(NSEvent.mouseLocation, screens: screens) {
+                transition { $0.commandDragBegan() }
+            }
+            return
+        }
         // 펼쳐져 있을 때만 의미가 있어서(clickedInBar) 펼친 상태와 같은 영역(메뉴바 줄 전체)으로 본다
         if HoverRegion.inMenuBar(NSEvent.mouseLocation, screens: screens) {
             transition { $0.clickedInBar() }
